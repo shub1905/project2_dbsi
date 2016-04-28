@@ -26,6 +26,7 @@ uint32_t probe_index_simd(Tree* tree, int32_t probe_key);
 uint32_t probe_index_simd_17(Tree* tree, int32_t probe_key, int32_t level, int32_t offset);
 uint32_t probe_index_simd_5(Tree* tree, int32_t probe_key, int32_t level, int32_t offset);
 uint32_t probe_index_simd_9(Tree* tree, int32_t probe_key, int32_t level, int32_t offset);
+uint32_t* probe_index_hardcode(Tree* tree, int32_t *probes, size_t num_probes);
 void cleanup_index(Tree* tree);
 void print_tree(Tree* tree);
 

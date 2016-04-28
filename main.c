@@ -55,11 +55,16 @@ int main(int argc, char* argv[]) {
 
         for (size_t i = 0; i < num_probes; ++i) {
                 result_simd[i] = probe_index_simd(tree, probe[i]);
-        }        
+        }
+
+        uint32_t * result_simd_hardcode = probe_index_hardcode(tree, probe, num_probes);
 
         // output results
         for (size_t i = 0; i < num_probes; ++i) {
-                fprintf(stdout, "%d %u\n", probe[i], result[i], result_simd[i]);
+                fprintf(stdout, "%d %u %u %u\n", probe[i], result[i], result_simd[i], result_simd_hardcode[i]);
+                if (result[i]!=result_simd_hardcode[i]) {
+                        break;
+                }
         }
 
         // cleanup and exit

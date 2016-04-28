@@ -120,17 +120,18 @@ uint32_t probe_index_simd(Tree* tree, int32_t probe_key) {
         size_t offset = result * tree->node_capacity[level];
         size_t low = 0;
         size_t high = tree->node_capacity[level];
+        size_t k;
 
         if (high == 4) {
-            size_t k = probe_index_simd_5(tree, probe_key, level, offset);
+            k = probe_index_simd_5(tree, probe_key, level, offset);
             result = result * (tree->node_capacity[level] + 1) + k;
         }
         else if (high == 8) {
-            size_t k = probe_index_simd_9(tree, probe_key, level, offset);
+            k = probe_index_simd_9(tree, probe_key, level, offset);
             result = result * (tree->node_capacity[level] + 1) + k;
         }
         else if (high == 16) {
-            size_t k = probe_index_simd_17(tree, probe_key, level, offset);
+            k = probe_index_simd_17(tree, probe_key, level, offset);
             result = result * (tree->node_capacity[level] + 1) + k;
         }
         else {
@@ -138,9 +139,10 @@ uint32_t probe_index_simd(Tree* tree, int32_t probe_key) {
             return -1;
         }
     }
+    return result;
 }
 
-uint32_t probe_index_simd_17(Tree* tree, int32_t probe_key, int32_t level, int32_t offset) {
+inline uint32_t probe_index_simd_17(Tree* tree, int32_t probe_key, int32_t level, int32_t offset) {
     __m128i key = _mm_cvtsi32_si128(probe_key);
     key = _mm_shuffle_epi32(key, 0);
 
@@ -165,7 +167,7 @@ uint32_t probe_index_simd_17(Tree* tree, int32_t probe_key, int32_t level, int32
     return res; 
 }
 
-uint32_t probe_index_simd_5(Tree* tree, int32_t probe_key, int32_t level, int32_t offset) {
+inline uint32_t probe_index_simd_5(Tree* tree, int32_t probe_key, int32_t level, int32_t offset) {
     // access level 1 (non-root) of the index (5-way)
     __m128i key = _mm_cvtsi32_si128(probe_key);
     key = _mm_shuffle_epi32(key, 0);
@@ -180,7 +182,7 @@ uint32_t probe_index_simd_5(Tree* tree, int32_t probe_key, int32_t level, int32_
     return res;
 }
 
-uint32_t probe_index_simd_9(Tree* tree, int32_t probe_key, int32_t level, int32_t offset) {
+inline uint32_t probe_index_simd_9(Tree* tree, int32_t probe_key, int32_t level, int32_t offset) {
     // access level 1 (non-root) of the index (5-way)
     __m128i key = _mm_cvtsi32_si128(probe_key);
     key = _mm_shuffle_epi32(key, 0);
@@ -197,6 +199,156 @@ uint32_t probe_index_simd_9(Tree* tree, int32_t probe_key, int32_t level, int32_
     int res = _bit_scan_forward(mask ^ 0x1FFFF);
     // r_2 += (r_1 << 3) + r_1;
     return res;
+}
+
+uint32_t * probe_index_hardcode(Tree* tree, int32_t *probes, size_t num_probes){
+    register __m128i root1 = _mm_load_si128((__m128i*) &tree->key_array[0][0]);
+    register __m128i root2 = _mm_load_si128((__m128i*) &tree->key_array[0][4]);
+
+    int mask1, mask2, mask3, mask4;
+    int res1, res2, res3, res4;
+    int res1_0 = 0, res2_0 = 0, res3_0 = 0, res4_0 = 0;
+
+    register __m128i k1, k2, k3, k4;
+    __m128i k;
+    __m128i cmp_1, cmp_2, cmp_3, cmp_4;
+    __m128i cmp_1_A, cmp_1_B, cmp_2_A, cmp_2_B;
+    __m128i cmp_3_A, cmp_3_B, cmp_4_A, cmp_4_B;
+    __m128i lvl1, lvl2, lvl3, lvl4;
+
+    __m128i lvl_1_A, lvl_1_B, lvl_2_A, lvl_2_B;
+    __m128i lvl_3_A, lvl_3_B, lvl_4_A, lvl_4_B;
+
+    uint32_t* result = malloc(sizeof(uint32_t) * num_probes);
+
+    for (int i=0; i<num_probes; i+=4) {
+        // loading Keys
+        k = _mm_load_si128((__m128i*) &probes[i]);
+        k1 = _mm_shuffle_epi32(k, _MM_SHUFFLE(0,0,0,0));
+        k2 = _mm_shuffle_epi32(k, _MM_SHUFFLE(1,1,1,1));
+        k3 = _mm_shuffle_epi32(k, _MM_SHUFFLE(2,2,2,2));
+        k4 = _mm_shuffle_epi32(k, _MM_SHUFFLE(3,3,3,3));
+
+        // Scanning Level 0 capacity = 8
+        cmp_1_A = _mm_cmpgt_epi32(k1, root1);
+        cmp_1_B = _mm_cmpgt_epi32(k1, root2);
+
+        cmp_2_A = _mm_cmpgt_epi32(k2, root1);
+        cmp_2_B = _mm_cmpgt_epi32(k2, root2);
+
+        cmp_3_A = _mm_cmpgt_epi32(k3, root1);
+        cmp_3_B = _mm_cmpgt_epi32(k3, root2);                
+        
+        cmp_4_A = _mm_cmpgt_epi32(k4, root1);
+        cmp_4_B = _mm_cmpgt_epi32(k4, root2);
+
+        cmp_1 = _mm_packs_epi32(cmp_1_A, cmp_1_B);
+        cmp_2 = _mm_packs_epi32(cmp_2_A, cmp_2_B);
+        cmp_3 = _mm_packs_epi32(cmp_3_A, cmp_3_B);
+        cmp_4 = _mm_packs_epi32(cmp_4_A, cmp_4_B);
+
+        cmp_1 = _mm_packs_epi16(cmp_1, _mm_setzero_si128());
+        cmp_2 = _mm_packs_epi16(cmp_2, _mm_setzero_si128());
+        cmp_3 = _mm_packs_epi16(cmp_3, _mm_setzero_si128());
+        cmp_4 = _mm_packs_epi16(cmp_4, _mm_setzero_si128());
+
+        mask1 = _mm_movemask_epi8(cmp_1);
+        mask2 = _mm_movemask_epi8(cmp_2);
+        mask3 = _mm_movemask_epi8(cmp_3);
+        mask4 = _mm_movemask_epi8(cmp_4);
+
+        res1_0 = _bit_scan_forward(mask1 ^ 0x1FFFF);
+        res2_0 = _bit_scan_forward(mask2 ^ 0x1FFFF);
+        res3_0 = _bit_scan_forward(mask3 ^ 0x1FFFF);
+        res4_0 = _bit_scan_forward(mask4 ^ 0x1FFFF);
+
+        res1 = res1_0;
+        res2 = res2_0;
+        res3 = res3_0;
+        res4 = res4_0;
+
+        // Scanning Level 1 capacity = 4
+        lvl1 = _mm_load_si128((__m128i*) &tree->key_array[1][res1 << 2]);
+        lvl2 = _mm_load_si128((__m128i*) &tree->key_array[1][res2 << 2]);
+        lvl3 = _mm_load_si128((__m128i*) &tree->key_array[1][res3 << 2]);
+        lvl4 = _mm_load_si128((__m128i*) &tree->key_array[1][res4 << 2]);
+
+        cmp_1 = _mm_cmpgt_epi32(k1, lvl1);
+        cmp_2 = _mm_cmpgt_epi32(k2, lvl2);
+        cmp_3 = _mm_cmpgt_epi32(k3, lvl3);
+        cmp_4 = _mm_cmpgt_epi32(k4, lvl4);
+
+        mask1 = _mm_movemask_ps(_mm_castsi128_ps(cmp_1));
+        mask2 = _mm_movemask_ps(_mm_castsi128_ps(cmp_2));
+        mask3 = _mm_movemask_ps(_mm_castsi128_ps(cmp_3));
+        mask4 = _mm_movemask_ps(_mm_castsi128_ps(cmp_4));
+
+        res1_0 = _bit_scan_forward(mask1 ^ 0x1FF);
+        res2_0 = _bit_scan_forward(mask2 ^ 0x1FF);
+        res3_0 = _bit_scan_forward(mask3 ^ 0x1FF);
+        res4_0 = _bit_scan_forward(mask4 ^ 0x1FF);
+
+        res1 = res1 * 5 + res1_0;
+        res2 = res2 * 5 + res2_0;
+        res3 = res3 * 5 + res3_0;
+        res4 = res4 * 5 + res4_0;
+
+        //Scanning Level 2 capacity = 8
+        lvl_1_A = _mm_load_si128((__m128i*) &tree->key_array[2][res1 << 3]);
+        lvl_1_B = _mm_load_si128((__m128i*) &tree->key_array[2][(res1 << 3) + 4]);
+
+        lvl_2_A = _mm_load_si128((__m128i*) &tree->key_array[2][res2 << 3]);
+        lvl_2_B = _mm_load_si128((__m128i*) &tree->key_array[2][(res2 << 3) + 4]);
+
+        lvl_3_A = _mm_load_si128((__m128i*) &tree->key_array[2][res3 << 3]);
+        lvl_3_B = _mm_load_si128((__m128i*) &tree->key_array[2][(res3 << 3) + 4]);
+
+        lvl_4_A = _mm_load_si128((__m128i*) &tree->key_array[2][res4 << 3]);
+        lvl_4_B = _mm_load_si128((__m128i*) &tree->key_array[2][(res4 << 3) + 4]);
+
+        cmp_1_A = _mm_cmpgt_epi32(k1, lvl_1_A);
+        cmp_1_B = _mm_cmpgt_epi32(k1, lvl_1_B);
+
+        cmp_2_A = _mm_cmpgt_epi32(k2, lvl_2_A);
+        cmp_2_B = _mm_cmpgt_epi32(k2, lvl_2_B);
+
+        cmp_3_A = _mm_cmpgt_epi32(k3, lvl_3_A);
+        cmp_3_B = _mm_cmpgt_epi32(k3, lvl_3_B);
+
+        cmp_4_A = _mm_cmpgt_epi32(k4, lvl_4_A);
+        cmp_4_B = _mm_cmpgt_epi32(k4, lvl_4_B);
+
+        cmp_1 = _mm_packs_epi32(cmp_1_A, cmp_1_B);
+        cmp_2 = _mm_packs_epi32(cmp_2_A, cmp_2_B);
+        cmp_3 = _mm_packs_epi32(cmp_3_A, cmp_3_B);
+        cmp_4 = _mm_packs_epi32(cmp_4_A, cmp_4_B);
+
+        cmp_1 = _mm_packs_epi16(cmp_1, _mm_setzero_si128());
+        cmp_2 = _mm_packs_epi16(cmp_2, _mm_setzero_si128());
+        cmp_3 = _mm_packs_epi16(cmp_3, _mm_setzero_si128());
+        cmp_4 = _mm_packs_epi16(cmp_4, _mm_setzero_si128());
+
+        mask1 = _mm_movemask_epi8(cmp_1);
+        mask2 = _mm_movemask_epi8(cmp_2);
+        mask3 = _mm_movemask_epi8(cmp_3);
+        mask4 = _mm_movemask_epi8(cmp_4);
+
+        res1_0 = _bit_scan_forward(mask1 ^ 0x1FFFF);
+        res2_0 = _bit_scan_forward(mask2 ^ 0x1FFFF);
+        res3_0 = _bit_scan_forward(mask3 ^ 0x1FFFF);
+        res4_0 = _bit_scan_forward(mask4 ^ 0x1FFFF);
+
+        res1 = res1 * 9 + res1_0;
+        res2 = res2 * 9 + res2_0;
+        res3 = res3 * 9 + res3_0;
+        res4 = res4 * 9 + res4_0;
+
+        result[i] = res1;
+        result[i+1] = res2;
+        result[i+2] = res3;
+        result[i+3] = res4;
+    }
+    return result;
 }
 
 void print_tree(Tree* tree) {
