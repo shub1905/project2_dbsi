@@ -7,13 +7,12 @@
 #include "p2random.h"
 #include "tree.h"
 
-#define BILLION 1E9
-
 int main(int argc, char* argv[]) {
         // parsing arguments
         assert(argc > 3);
         struct timespec gen_start, gen_fin, simd_start, simd_fin, hard_start, hard_fin;
         double accum;
+	int hardcoded = 0; // set to 1 if we probe hard coded tree
         size_t num_keys = strtoull(argv[1], NULL, 0);
         size_t num_probes = strtoull(argv[2], NULL, 0);
         size_t num_levels = (size_t) argc - 3;
@@ -43,6 +42,7 @@ int main(int argc, char* argv[]) {
         free(gen);
         uint32_t* result = malloc(sizeof(uint32_t) * num_probes);
         uint32_t* result_simd = malloc(sizeof(uint32_t) * num_probes);
+	uint32_t* result_simd_hardcode;
         assert(result != NULL);
         assert(result_simd != NULL);
 
@@ -68,20 +68,27 @@ int main(int argc, char* argv[]) {
         clock_gettime(CLOCK_MONOTONIC, &simd_fin);
 
         if (tree->node_capacity[0] == 8 && tree->node_capacity[1] == 4 && tree->node_capacity[2] == 8 && num_probes%4==0) {
+		hardcoded = 1;
 		clock_gettime(CLOCK_MONOTONIC, &hard_start);
-                uint32_t * result_simd_hardcode = probe_index_hardcode(tree, probe, num_probes);
+                result_simd_hardcode = probe_index_hardcode(tree, probe, num_probes);
 		clock_gettime(CLOCK_MONOTONIC, &hard_fin);
 		accum = time_difference(hard_start, hard_fin);
-                printf( "Hardcode Execution Time: %lf sec\n", accum );                
         }
 
         // output results
          for (size_t i = 0; i < num_probes; ++i) {
 		//fprintf(stdout, "%d %u %u %u\n", probe[i], result[i], result_simd[i], result_simd_hardcode[i]);
-		fprintf(stdout, "%d %u %u\n", probe[i], result[i], result_simd[i]);
+		if (hardcoded)
+			fprintf(stdout, "probe %d: non-simd %u, simd %u, simd-hc %u\n", probe[i], result[i], result_simd[i], result_simd_hardcode[i]);
+		else
+			fprintf(stdout, "probe %d: non-simd %u, simd %u, simd-hc --\n", probe[i], result[i], result_simd[i]);
+
          }
 
         // Calculate time it took
+	if (hardcoded)
+		printf( "Hardcode Execution Time: %lf sec\n", accum );                
+	
 	accum = time_difference(gen_start, gen_fin);
         printf( "Regular Execution Time: %lf sec\n", accum );
 
