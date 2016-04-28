@@ -108,17 +108,18 @@ uint32_t probe_index(Tree* tree, int32_t probe_key) {
 }
 
 uint32_t probe_index_simd(Tree* tree, int32_t probe_key, int32_t level, int32_t offset) {
+    int node_level = tree->node_capacity[level] * offset;
     // broadcast 1 32-bit key to all SIMD lanes
-    __m128i key = _mm_loadl_epi32((__m32i*) probe_key);
+    __m128i key = _mm_cvtsi32_si128(probe_key);
     // key = _mm_loadl_epi32(probe_key);   // asm: movd
-    key = _mm_shuffle_epi32(key, 0);
+    key = _mm_shuffle_epi32(key, _MM_SHUFFLE(0,0,0,0));
 
-    __m128i node = _mm_loadl_epi32(tree->key_array[level]);
-    // compare with 16 delimiters stored in 4 registers
+    __m128i node = _mm_load_si128((__m128i*) &tree->key_array[level][node_level]);
+    // compare with 4 delimiters stored in 1 register
     __m128i cmp_ABCD = _mm_cmpgt_epi32(key, node);
     // extract the mask the least significant bit
-    __m128i mask = _mm_movemask_epi8(cmp_ABCD);
-    __m128i res = _bit_scan_forward(mask | 0x10000);   // asm: bsf
+    int mask = _mm_movemask_epi8(cmp_ABCD);
+    int res = _bit_scan_forward(mask | 0x10000);   // asm: bsf
     return 0;
 }
 

@@ -11,6 +11,7 @@
 #include <smmintrin.h>
 #include <nmmintrin.h>
 #include <ammintrin.h>
+#include <x86intrin.h>
 
 typedef struct {
         size_t num_levels;
