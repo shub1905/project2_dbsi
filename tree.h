@@ -29,5 +29,6 @@ uint32_t probe_index_simd_9(Tree* tree, int32_t probe_key, int32_t level, int32_
 uint32_t* probe_index_hardcode(Tree* tree, int32_t *probes, size_t num_probes);
 void cleanup_index(Tree* tree);
 void print_tree(Tree* tree);
+double time_difference(struct timespec, struct timespec);
 
 #endif

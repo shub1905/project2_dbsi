@@ -12,7 +12,7 @@
 int main(int argc, char* argv[]) {
         // parsing arguments
         assert(argc > 3);
-        clock_t gen_start, gen_fin, simd_start, simd_fin, hard_start, hard_fin;
+        struct timespec gen_start, gen_fin, simd_start, simd_fin, hard_start, hard_fin;
         double accum;
         size_t num_keys = strtoull(argv[1], NULL, 0);
         size_t num_probes = strtoull(argv[2], NULL, 0);
@@ -53,47 +53,41 @@ int main(int argc, char* argv[]) {
         // printf("\n");
 
         // perform index probing (Phase 2)
-        // clock_gettime(CLOCK_REALTIME, &gen_start);
-        gen_start = clock();
+        clock_gettime(CLOCK_MONOTONIC, &gen_start);
+
         for (size_t i = 0; i < num_probes; ++i) {
                 result[i] = probe_index(tree, probe[i]);
         }
-        gen_fin = clock();
-        // clock_gettime(CLOCK_REALTIME, &gen_fin);
+		
+        clock_gettime(CLOCK_MONOTONIC, &gen_fin);
 
-        // clock_gettime(CLOCK_REALTIME, &simd_start);
-        simd_start = clock();
+        clock_gettime(CLOCK_MONOTONIC, &simd_start);
         for (size_t i = 0; i < num_probes; ++i) {
                 result_simd[i] = probe_index_simd(tree, probe[i]);
         }
-        simd_fin = clock();
-        // clock_gettime(CLOCK_REALTIME, &simd_fin);
+        clock_gettime(CLOCK_MONOTONIC, &simd_fin);
 
-        // clock_gettime(CLOCK_REALTIME, &hard_start);
         if (tree->node_capacity[0] == 8 && tree->node_capacity[1] == 4 && tree->node_capacity[2] == 8 && num_probes%4==0) {
-                hard_start = clock();
+		clock_gettime(CLOCK_MONOTONIC, &hard_start);
                 uint32_t * result_simd_hardcode = probe_index_hardcode(tree, probe, num_probes);
-                hard_fin = clock();
-                accum = (double)(hard_fin - hard_start) / CLOCKS_PER_SEC;
+		clock_gettime(CLOCK_MONOTONIC, &hard_fin);
+		accum = time_difference(hard_start, hard_fin);
                 printf( "Hardcode Execution Time: %lf sec\n", accum );                
         }
-        // clock_gettime(CLOCK_REALTIME, &hard_fin);
 
         // output results
-        // for (size_t i = 0; i < num_probes; ++i) {
-        //         fprintf(stdout, "%d %u %u %u\n", probe[i], result[i], result_simd[i], result_simd_hardcode[i]);
-        // }
+         for (size_t i = 0; i < num_probes; ++i) {
+		//fprintf(stdout, "%d %u %u %u\n", probe[i], result[i], result_simd[i], result_simd_hardcode[i]);
+		fprintf(stdout, "%d %u %u\n", probe[i], result[i], result_simd[i]);
+         }
 
         // Calculate time it took
-        // double accum = ( gen_fin.tv_sec - gen_start.tv_sec ) + ( gen_fin.tv_nsec - gen_start.tv_nsec ) / BILLION;
-        accum = (double)(gen_fin - gen_start) / CLOCKS_PER_SEC;
+	accum = time_difference(gen_start, gen_fin);
         printf( "Regular Execution Time: %lf sec\n", accum );
 
-        // accum = ( simd_fin.tv_sec - simd_start.tv_sec ) + ( simd_fin.tv_nsec - simd_start.tv_nsec ) / BILLION;
-        accum = (double)(simd_fin - simd_start) / CLOCKS_PER_SEC;
+        accum = time_difference(simd_start, simd_fin);
         printf( "SIMD Execution Time: %lf sec\n", accum );
 
-        // accum = ( hard_fin.tv_sec - hard_start.tv_sec ) + ( hard_fin.tv_nsec - hard_start.tv_nsec ) / BILLION;
         // cleanup and exit
         free(result);
         free(probe);
