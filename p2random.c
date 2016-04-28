@@ -40,7 +40,7 @@ uint32_t rand32_next(rand32_t *s)
 	x ^= (x << 15) & 0xefc60000;
 	x ^= (x >> 18);
 	s->index = i + 1;
-	return x;
+	return x % 1000;
 }
 
 int int32_cmp(const void *x, const void *y)
@@ -55,7 +55,7 @@ int32_t *generate(size_t n, rand32_t *gen)
 	size_t i;
 	int32_t *a = malloc(n << 2);
 	for (i = 0 ; i != n ; ++i)
-		a[i] = (int32_t) rand32_next(gen);
+		a[i] = (int32_t) rand32_next(gen) % 1000;
 	return a;
 }
 
@@ -67,7 +67,7 @@ int32_t *generate_sorted_unique(size_t n, rand32_t *gen)
 	uint32_t *a = malloc(n << 2);
 	uint32_t *b = calloc(m, 4);
 	while (i != n) {
-		uint32_t k = rand32_next(gen);
+		uint32_t k = rand32_next(gen) % 1000;
 		if (k != 0) {
 			size_t h = (uint32_t) (k * 0x9e3779b1);
 			h = (h * (uint64_t) m) >> 32;
