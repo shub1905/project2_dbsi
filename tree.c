@@ -120,19 +120,58 @@ uint32_t probe_index_simd(Tree* tree, int32_t probe_key) {
         size_t offset = result * tree->node_capacity[level];
         size_t low = 0;
         size_t high = tree->node_capacity[level];
-        size_t k;
 
         if (high == 4) {
-            k = probe_index_simd_5(tree, probe_key, level, offset);
-            result = result * (tree->node_capacity[level] + 1) + k;
+            __m128i key = _mm_cvtsi32_si128(probe_key);
+            key = _mm_shuffle_epi32(key, 0);
+
+            __m128i lvl = _mm_load_si128((__m128i*) &tree->key_array[level][offset]);
+            __m128i cmp = _mm_cmpgt_epi32(key, lvl);
+            int mask = _mm_movemask_ps(_mm_castsi128_ps(cmp));
+
+            // printf("Check : %d\n", tree->key_array[level][offset]);
+            uint32_t res = _bit_scan_forward(mask ^ 0x1FF);
+            result = result * (tree->node_capacity[level] + 1) + res;
         }
         else if (high == 8) {
-            k = probe_index_simd_9(tree, probe_key, level, offset);
-            result = result * (tree->node_capacity[level] + 1) + k;
+            __m128i key = _mm_cvtsi32_si128(probe_key);
+            key = _mm_shuffle_epi32(key, 0);
+
+            __m128i lvl_2_A = _mm_load_si128((__m128i*) &tree->key_array[level][offset]);
+            __m128i lvl_2_B = _mm_load_si128((__m128i*) &tree->key_array[level][offset + 4]);
+
+            __m128i cmp_2_A = _mm_cmpgt_epi32(key, lvl_2_A);
+            __m128i cmp_2_B = _mm_cmpgt_epi32(key, lvl_2_B);
+            
+            __m128i cmp_2 = _mm_packs_epi32(cmp_2_A, cmp_2_B);
+            cmp_2 = _mm_packs_epi16(cmp_2, _mm_setzero_si128());
+            int mask = _mm_movemask_epi8(cmp_2);
+            int res = _bit_scan_forward(mask ^ 0x1FFFF);
+            result = result * (tree->node_capacity[level] + 1) + res;
         }
         else if (high == 16) {
-            k = probe_index_simd_17(tree, probe_key, level, offset);
-            result = result * (tree->node_capacity[level] + 1) + k;
+            __m128i key = _mm_cvtsi32_si128(probe_key);
+            key = _mm_shuffle_epi32(key, 0);
+
+            __m128i del_ABCD = _mm_load_si128((__m128i*) &tree->key_array[level][offset + 0]);
+            __m128i del_EFGH = _mm_load_si128((__m128i*) &tree->key_array[level][offset + 4]);
+            __m128i del_IJKL = _mm_load_si128((__m128i*) &tree->key_array[level][offset + 8]);
+            __m128i del_MNOP = _mm_load_si128((__m128i*) &tree->key_array[level][offset + 12]);
+
+
+            // compare with 16 delimiters stored in 4 registers
+            __m128i cmp_ABCD = _mm_cmpgt_epi32(key, del_ABCD);
+            __m128i cmp_EFGH = _mm_cmpgt_epi32(key, del_EFGH);
+            __m128i cmp_IJKL = _mm_cmpgt_epi32(key, del_IJKL);
+            __m128i cmp_MNOP = _mm_cmpgt_epi32(key, del_MNOP);
+            // pack results to 16-bytes in a single SIMD register
+            __m128i cmp_A_to_H = _mm_packs_epi32(cmp_ABCD, cmp_EFGH);
+            __m128i cmp_I_to_P = _mm_packs_epi32(cmp_IJKL, cmp_MNOP);
+            __m128i cmp_A_to_P = _mm_packs_epi16(cmp_A_to_H, cmp_I_to_P);
+            // extract the mask the least significant bit
+            int mask = _mm_movemask_epi8(cmp_A_to_P);
+            uint32_t res = _bit_scan_forward(mask ^ 0xFFFFFFFF);
+            result = result * (tree->node_capacity[level] + 1) + res;
         }
         else {
             printf("Error\n");
